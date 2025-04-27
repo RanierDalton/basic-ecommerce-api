@@ -163,26 +163,77 @@ def get_products():
     return jsonify(list), 200
 
 # carrinho
-@app.route('/api/cart/add/<int: product_id>', methods=['POST'])
+@app.route('/api/cart/add/<int:product_id>', methods=['POST'])
 @login_required
-def addd_to_cart(product_id):
+def add_to_cart(product_id):
+    request = request.json
     user = User.query.get(int(current_user.id))
     product = Product.query.get(product_id)
+    qtd = request.get('quantity', 1)
 
     if not product:
         return jsonify({"message":"Produto não encontrado"}), 404
-    
-    if not user:
-        return jsonify({"message":"Usuário não encontrado"}), 404
-    
-    
+
+    cart = CartItem(
+        fk_user=user.id,
+        fk_product=product.id,
+        quantity=qtd
+    )
+
+    db.session.add(cart)
+    db.session.commit()
     
     return jsonify({"message":"Produto adicionado com sucesso"}), 200
+
+@app.route('/api/cart/remove/<int:product_id>', methods=['POST'])
+@login_required
+def remove_from_cart(product_id):
+    user = User.query.get(int(current_user.id))   
+    cart = CartItem.query.filter_by(fk_user=user.id, fk_product=product_id).first()
+
+    if not cart:
+        return jsonify({"message":"Produto não encontrado no carrinho"}), 400
+
+    db.session.delete(cart)
+    db.session.commit()
+    
+    return jsonify({"message":"Produto removido com sucesso"}), 200
 
 @app.route('/api/cart', methods=['GET'])
 @login_required
 def get_cart():
-    pass
+    user = User.query.get(int(current_user.id))
+    cart_items = user.cart # substitui o filtro por fk_user
+
+    if not cart_items:
+        return jsonify({"message":"Carrinho vazio"}), 200
+    
+    cart = []
+
+    for item in cart_items:
+        product = Product.query.get(item.fk_product)
+        cart.append({
+            "id": item.id,
+            "product_id": item.fk_product,
+            "name": product.name,
+            "price": product.price,
+            "quantity": item.quantity
+        })
+
+    return jsonify(cart), 200
+
+@app.route('/api/cart/checkout', methods=['GET'])
+@login_required
+def checkout():
+    user = User.query.get(int(current_user.id))    
+    cart_items = user.cart # substitui o filtro por fk_user usando relationship
+
+    for item in cart_items:
+        db.session.delete(item)
+    db.session.commit()
+
+    return jsonify({"message":"Checkout realizada com sucesso!"}), 200
+
 # teste
 @app.route('/teste')
 def hello_world():
